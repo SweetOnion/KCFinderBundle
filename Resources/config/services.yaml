@@ -1,0 +1,10 @@
+services:
+
+  Ikadoc\KCFinderBundle\Controller\ProxyController:
+    arguments:
+      - '@parameter_bag'
+    tags:
+      - { name: controller.service_arguments }
+      - { name: container.service_subscriber }
+    calls:
+      - setContainer: ['@service_container']

@@ -2,50 +2,59 @@
 
 namespace Ikadoc\KCFinderBundle\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class ProxyController extends Controller
+class ProxyController extends AbstractController
 {
-	public function proxyAction($file)
-	{
-		$pathinfo = pathinfo($file);
-		$path = $pathinfo['dirname'];
-		$fileName = $pathinfo['basename'];
-		if ('.' == $path) {
-			$path = $this->getParameter('ikadoc_kc_finder_path');
-		} else {
-			$path = rtrim($this->getParameter('ikadoc_kc_finder_path'),'/') . '/' . $path;
-		}
+    protected ParameterBagInterface $parameterBag;
 
-		if (in_array($pathinfo['extension'], array('png','gif','jpg'))) {
-			$response = new BinaryFileResponse($path . '/' . $pathinfo['basename']);
-			return $response;
-		}
+    public function __construct(ParameterBagInterface $parameterBag)
+    {
+        $this->parameterBag = $parameterBag;
+    }
 
-		$config = $this->getParameter('ikadoc_kc_finder_config');
-		if (is_array($config)) {
-			if (!array_key_exists('KCFINDER',$_SESSION) || is_null($_SESSION['KCFINDER'])) {
-				$_SESSION['KCFINDER'] = array();
-			}
-			foreach($config as $configName => $configElement) {
-				$_SESSION['KCFINDER'][$configName] = $configElement;
-			}
-		}
+    public function proxyAction(Request $request, string $file): Response
+    {
+        $pathinfo = pathinfo($file);
+        $path = $pathinfo['dirname'];
+        $fileName = $pathinfo['basename'];
+        if ('.' == $path) {
+            $path = $this->parameterBag->get('ikadoc_kc_finder_path');
+        } else {
+            $path = rtrim($this->parameterBag->get('ikadoc_kc_finder_path'), '/').'/'.$path;
+        }
 
-		$previousscriptFileName = $_SERVER['SCRIPT_FILENAME'];
-		$previousCwd = getcwd();
-		chdir($path);
-		$_SERVER['SCRIPT_FILENAME'] = $path . '/' . $fileName;
+        if (in_array($pathinfo['extension'], ['png', 'gif', 'jpg', 'ico'])) {
+            return new BinaryFileResponse($path.'/'.$pathinfo['basename']);
+        }
 
-		require $pathinfo['basename'];
+        $config = $this->parameterBag->get('ikadoc_kc_finder_config');
+        $config['cookieDomain'] = $request->getHost();
+        if (is_array($config)) {
+            if (!array_key_exists('KCFINDER', $_SESSION) || is_null($_SESSION['KCFINDER'])) {
+                $_SESSION['KCFINDER'] = [];
+            }
+            foreach ($config as $configName => $configElement) {
+                $_SESSION['KCFINDER'][$configName] = $configElement;
+            }
+        }
 
-		$_SERVER['SCRIPT_FILENAME'] = $previousscriptFileName;
-		chdir($previousCwd);
+        $previousScriptFileName = $_SERVER['SCRIPT_FILENAME'];
+        $previousCwd = getcwd();
+        chdir($path);
+        $_SERVER['SCRIPT_FILENAME'] = $path.'/'.$fileName;
 
-		ob_end_flush();
+        require $pathinfo['basename'];
 
-		return new Response();
-	}
+        $_SERVER['SCRIPT_FILENAME'] = $previousScriptFileName;
+        chdir($previousCwd);
+
+        ob_end_flush();
+
+        return new Response();
+    }
 }
